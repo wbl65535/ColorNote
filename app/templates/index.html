@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ColorNote - 彩色便利贴</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Vue.js CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+
+    <!-- Meta tags for mobile optimization -->
+    <meta name="theme-color" content="#FFE57F">
+    <meta name="description" content="ColorNote - 移动端彩色便利贴应用">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ColorNote">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Main Vue.js App Container -->
+    <div id="app" class="min-h-screen">
+        <!-- Loading State -->
+        <div v-if="loading" class="flex items-center justify-center min-h-screen">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400"></div>
+        </div>
+
+        <!-- Main Application -->
+        <div v-else class="max-w-md mx-auto bg-white min-h-screen shadow-lg">
+            <!-- Header -->
+            <header class="bg-white border-b border-gray-200 px-4 py-3">
+                <h1 class="text-xl font-bold text-gray-800 text-center">ColorNote</h1>
+                <p class="text-sm text-gray-500 text-center mt-1">你的彩色便利贴</p>
+            </header>
+
+            <!-- Notes List Container -->
+            <div class="p-4">
+                <!-- Notes Grid -->
+                <div v-if="notes.length > 0" class="grid gap-4">
+                    <div
+                        v-for="note in notes"
+                        :key="note.id"
+                        class="rounded-lg p-4 shadow-sm border cursor-pointer transition-all duration-200 hover:shadow-md"
+                        :style="{ backgroundColor: note.color }"
+                        @click="editNote(note)"
+                    >
+                        <!-- Note Title -->
+                        <h3 class="font-semibold text-gray-800 mb-2 line-clamp-1">
+                            {{ note.title }}
+                        </h3>
+
+                        <!-- Note Content Preview -->
+                        <p class="text-sm text-gray-700 line-clamp-3 mb-2">
+                            {{ note.content }}
+                        </p>
+
+                        <!-- Image Preview (show first image if exists) -->
+                        <div v-if="note.image_urls && note.image_urls.length > 0" class="mb-2">
+                            <img
+                                :src="note.image_urls[0]"
+                                :alt="'Note image'"
+                                class="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                            >
+                            <span v-if="note.image_urls.length > 1" class="text-xs text-gray-500 ml-2">
+                                +{{ note.image_urls.length - 1 }} more
+                            </span>
+                        </div>
+
+                        <!-- Note Metadata -->
+                        <div class="text-xs text-gray-500 mt-2">
+                            {{ formatDate(note.created_at) }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else class="text-center py-12">
+                    <div class="text-6xl mb-4">📝</div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">暂无笔记</h3>
+                    <p class="text-gray-500 mb-6">创建你的第一个彩色便利贴</p>
+                </div>
+            </div>
+
+            <!-- Floating Action Button -->
+            <button
+                @click="showCreatePanel"
+                class="fixed bottom-6 right-6 bg-yellow-400 hover:bg-yellow-500 text-white rounded-full w-14 h-14 shadow-lg transition-all duration-200 hover:scale-105 flex items-center justify-center"
+                :class="{ 'scale-95': isPanelOpen }"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+            </button>
+
+            <!-- Create/Edit Panel Overlay -->
+            <div
+                v-if="isPanelOpen"
+                class="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-end justify-center p-4"
+                @click.self="closePanel"
+            >
+                <div
+                    class="bg-white rounded-t-2xl w-full max-w-md shadow-xl transform transition-all duration-300 ease-out"
+                    :class="{ 'translate-y-0': isPanelOpen, 'translate-y-full': !isPanelOpen }"
+                    @click.stop
+                >
+                    <!-- Panel Header -->
+                    <div class="p-4 border-b border-gray-200" :style="{ backgroundColor: currentNote.color }">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-gray-800">
+                                {{ isEditing ? '编辑笔记' : '新建笔记' }}
+                            </h2>
+                            <button
+                                v-if="isEditing"
+                                @click="deleteNote"
+                                class="text-red-600 hover:text-red-800 p-2"
+                            >
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Panel Content -->
+                    <div class="p-4 max-h-96 overflow-y-auto">
+                        <!-- Title Input -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                            <input
+                                v-model="currentNote.title"
+                                type="text"
+                                maxlength="30"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                                placeholder="笔记标题"
+                            >
+                            <div class="text-xs text-gray-500 mt-1">
+                                {{ currentNote.title.length }}/30
+                            </div>
+                        </div>
+
+                        <!-- Content Input -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">内容</label>
+                            <textarea
+                                v-model="currentNote.content"
+                                maxlength="500"
+                                rows="4"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent resize-none"
+                                placeholder="写下你的想法..."
+                            ></textarea>
+                            <div class="text-xs text-gray-500 mt-1">
+                                {{ currentNote.content.length }}/500
+                            </div>
+                        </div>
+
+                        <!-- Color Selection -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">颜色</label>
+                            <div class="flex space-x-2">
+                                <button
+                                    v-for="color in availableColors"
+                                    :key="color.value"
+                                    @click="selectColor(color.value)"
+                                    :class="[
+                                        'w-8 h-8 rounded-full border-2 transition-all duration-200',
+                                        currentNote.color === color.value ? 'border-gray-800 scale-110' : 'border-gray-300 hover:scale-105'
+                                    ]"
+                                    :style="{ backgroundColor: color.value }"
+                                    :title="color.name"
+                                ></button>
+                            </div>
+                        </div>
+
+                        <!-- Image Upload Section -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">图片 (最多3张)</label>
+                            <div class="space-y-2">
+                                <!-- Existing Images -->
+                                <div v-for="(imageUrl, index) in currentNote.image_urls" :key="index" class="flex items-center space-x-2">
+                                    <img :src="imageUrl" class="w-12 h-12 object-cover rounded border" :alt="'Image ' + (index + 1)">
+                                    <button @click="removeImage(index)" class="text-red-500 hover:text-red-700 text-sm">删除</button>
+                                </div>
+
+                                <!-- Upload Button (if less than 3 images) -->
+                                <button
+                                    v-if="currentNote.image_urls.length < 3"
+                                    @click="triggerFileInput"
+                                    class="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                    </svg>
+                                    <span class="text-sm">添加图片</span>
+                                </button>
+                            </div>
+
+                            <!-- Hidden File Input -->
+                            <input
+                                ref="fileInput"
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                class="hidden"
+                                @change="handleFileUpload"
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Panel Footer -->
+                    <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+                        <div class="flex space-x-3">
+                            <button
+                                @click="closePanel"
+                                class="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                @click="saveNote"
+                                :disabled="!isValidNote"
+                                class="flex-1 px-4 py-2 text-white bg-yellow-400 hover:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                            >
+                                {{ isEditing ? '更新' : '保存' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div v-if="showDeleteConfirm" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-lg p-6 w-full max-w-sm">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">确认删除</h3>
+                    <p class="text-gray-600 mb-6">确定要删除这个笔记吗？此操作无法撤销。</p>
+                    <div class="flex space-x-3">
+                        <button
+                            @click="cancelDelete"
+                            class="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                            取消
+                        </button>
+                        <button
+                            @click="confirmDelete"
+                            class="flex-1 px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                        >
+                            删除
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

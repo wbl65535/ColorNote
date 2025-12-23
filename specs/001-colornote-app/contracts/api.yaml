@@ -1,0 +1,312 @@
+openapi: 3.0.3
+info:
+  title: ColorNote API
+  description: ColorNote 便签应用 REST API
+  version: 1.0.0
+  contact:
+    name: ColorNote Team
+
+servers:
+  - url: https://{project}.vercel.app/api
+    description: Production server
+    variables:
+      project:
+        default: colornote
+  - url: http://localhost:3000/api
+    description: Local development server
+
+paths:
+  /notes:
+    get:
+      summary: 获取所有笔记
+      description: 按创建时间降序返回所有笔记列表
+      operationId: getNotes
+      responses:
+        '200':
+          description: 成功获取笔记列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Note'
+              example:
+                notes:
+                  - id: 1
+                    title: "购物清单"
+                    content: "牛奶、面包、鸡蛋"
+                    color: "#FFE57F"
+                    image_urls: ["https://colornote.vercel-storage.com/notes/1/1640995200_shopping.jpg"]
+                    created_at: "2025-12-23T10:00:00Z"
+                    updated_at: "2025-12-23T10:00:00Z"
+        '500':
+          $ref: '#/components/responses/Error'
+
+    post:
+      summary: 创建新笔记
+      description: 创建一个新的笔记，支持图片上传
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - content
+              properties:
+                title:
+                  type: string
+                  maxLength: 30
+                  description: 笔记标题
+                content:
+                  type: string
+                  maxLength: 500
+                  description: 笔记内容
+                color:
+                  type: string
+                  pattern: '^#[0-9A-Fa-f]{6}$'
+                  default: "#FFE57F"
+                  description: 背景颜色 (HEX格式)
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                    description: 图片文件 (最多3个)
+                  maxItems: 3
+                  description: 上传的图片文件数组
+      responses:
+        '201':
+          description: 笔记创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+              example:
+                id: 2
+                title: "会议笔记"
+                content: "今天的产品会议讨论了新功能开发计划"
+                color: "#BAE1FF"
+                image_urls: []
+                created_at: "2025-12-23T11:00:00Z"
+                updated_at: "2025-12-23T11:00:00Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /notes/{noteId}:
+    parameters:
+      - name: noteId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: 笔记ID
+
+    get:
+      summary: 获取单个笔记
+      description: 根据ID获取特定笔记的详细信息
+      operationId: getNote
+      responses:
+        '200':
+          description: 成功获取笔记
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '404':
+          description: 笔记不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Error'
+
+    put:
+      summary: 更新笔记
+      description: 更新现有笔记，支持添加/删除图片
+      operationId: updateNote
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 30
+                  description: 笔记标题
+                content:
+                  type: string
+                  maxLength: 500
+                  description: 笔记内容
+                color:
+                  type: string
+                  pattern: '^#[0-9A-Fa-f]{6}$'
+                  description: 背景颜色 (HEX格式)
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  maxItems: 3
+                  description: 新上传的图片文件
+                deleted_image_urls:
+                  type: array
+                  items:
+                    type: string
+                  description: 要删除的图片URL列表
+      responses:
+        '200':
+          description: 笔记更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Error'
+
+    delete:
+      summary: 删除笔记
+      description: 删除指定笔记及其关联图片
+      operationId: deleteNote
+      responses:
+        '200':
+          description: 笔记删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          description: 笔记不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Error'
+
+components:
+  schemas:
+    Note:
+      type: object
+      required:
+        - id
+        - title
+        - content
+        - color
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: 笔记唯一标识
+        title:
+          type: string
+          maxLength: 30
+          description: 笔记标题
+        content:
+          type: string
+          maxLength: 500
+          description: 笔记内容
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          description: 背景颜色 (HEX格式)
+          example: "#FFE57F"
+        image_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 3
+          description: 图片URL数组
+          example: ["https://colornote.vercel-storage.com/notes/1/1640995200_image.jpg"]
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 最后更新时间
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 错误信息
+      example:
+        error: "Database connection failed"
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - field
+      properties:
+        error:
+          type: string
+          description: 验证错误信息
+        field:
+          type: string
+          description: 出错的字段名
+      example:
+        error: "Title cannot exceed 30 characters"
+        field: "title"
+
+  responses:
+    Error:
+      description: 服务器错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: 请求参数验证错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Note not found"
+            required:
+              - error
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API 密钥认证 (预留扩展用)
